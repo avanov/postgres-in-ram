@@ -1,0 +1,58 @@
+---
+# Postgres in RAM (tmpfs) for testing purposes
+# --------------------------------------------
+- name: Stop existing clusters (if any)
+  command: pg_ctlcluster {{ postgres_in_ram_version }} in-memory stop
+  ignore_errors: True
+
+- name: Unmount tmpfs (if mounted)
+  mount: name={{ postgres_in_ram_dir }} src=tmpfs fstype=tmpfs state=unmounted
+  ignore_errors: True
+
+- name: Clean up any previous setups
+  file: path="{{ item }}" state=absent
+  with_items:
+    - "/etc/postgresql/{{ postgres_in_ram_version }}/{{ postgres_in_ram_cluster_name }}"
+    - "{{ postgres_in_ram_dir }}"
+
+- name: Create directory
+  file: path={{ postgres_in_ram_dir }} state=directory recurse=yes mode=0700 owner=postgres group=postgres
+
+- name: Mount tmpfs
+  mount: name={{ postgres_in_ram_dir }} src=tmpfs fstype=tmpfs opts="size=512m,mode=0700" state=mounted
+
+- name: Create a cluster
+  # the following command is ubuntu/debian specific
+  command: pg_createcluster --user=postgres --group=postgres --datadir={{ postgres_in_ram_dir }} --locale=en_US.utf8 --encoding=UTF8 --port={{ postgres_in_ram_port }} --start-conf=auto {{ postgres_in_ram_version }} in-memory creates="{{ postgres_in_ram_dir }}/PG_VERSION"
+
+- name: Set up Postgres
+  template: src="{{ item }}.j2"
+            dest="/etc/postgresql/{{ postgres_in_ram_version }}/{{ postgres_in_ram_cluster_name }}/{{ item }}"
+            owner=postgres
+            group=postgres
+            mode=0640
+  with_items:
+    - postgresql.conf
+    - pg_hba.conf
+    - pg_ident.conf
+
+- name: Restart Postgres
+  command: pg_ctlcluster {{ postgres_in_ram_version }} in-memory restart
+
+- name: Add database user
+  postgresql_user: port="{{ postgres_in_ram_port }}"
+                   user="{{ postgres_in_ram_db_user }}"
+                   password="{{ postgres_in_ram_db_password }}"
+                   role_attr_flags=LOGIN,CREATEDB,REPLICATION
+                   state=present
+  sudo: yes
+  sudo_user: postgres
+
+- name: Create project's database
+  postgresql_db: port="{{ postgres_in_ram_port }}"
+                 db="{{ postgres_in_ram_db_name }}"
+                 owner="{{ postgres_in_ram_db_user }}"
+                 state=present
+                 encoding=UTF8
+  sudo: yes
+  sudo_user: postgres

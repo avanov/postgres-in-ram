@@ -1,0 +1,8 @@
+---
+postgres_in_ram_version: 9.3
+postgres_in_ram_cluster_name: in-memory
+postgres_in_ram_port: 55432
+postgres_in_ram_dir: "/mnt/{{ postgres_in_ram_cluster_name }}"
+postgres_in_ram_db_user: "{{ project_name }}"
+postgres_in_ram_db_password: "{{ project_name }}"
+postgres_in_ram_db_name: "{{ project_name }}"
